@@ -10,9 +10,6 @@ This README outlines the development of an image processing application that inc
 2. [Features](#features)
 3. [Algorithms Used](#algorithms-used)
 4. [Image Quality Metrics](#image-quality-metrics)
-5. [How to Use](#how-to-use)
-6. [Conclusion](#conclusion)
-
 ---
 
 ## **Introduction**
