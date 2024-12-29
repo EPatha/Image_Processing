@@ -5,7 +5,8 @@ import os
 import cv2
 import numpy as np
 from skimage.metrics import structural_similarity as ssim
-from matplotlib import pyplot as plt
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 # Functionality placeholders
 def open_image():
@@ -27,11 +28,17 @@ def open_image():
             original_size = os.path.getsize(file_path) / 1024  # Size in KB
             entry_size_original.delete(0, END)
             entry_size_original.insert(0, f"{original_size:.4f} kb")
+            
+            # Plot histogram of the original image
+            plot_histogram(img_path, "original")
+            
+            # Calculate and display metrics for the original image
+            calculate_metrics(img_path, img_path)
         except Exception as e:
             print("Error opening image:", e)
 
 def compress_image():
-    global compressed_img, compressed_size, img_display_compressed
+    global compressed_img, compressed_size, img_display_compressed, compression_quality, algorithm_name
     try:
         img_cv = cv2.imread(img_path)
 
@@ -43,9 +50,13 @@ def compress_image():
         # Define the path for the compressed image
         compressed_path = os.path.join(output_dir, "compressed_image.jpg")
 
+        # Compression quality (percentage)
+        compression_quality = quality_slider.get()  # Get compression quality from slider
+        algorithm_name = "JPEG Compression"  # Set the algorithm name
+
         # Compress the image and save it
-        cv2.imwrite(compressed_path, img_cv, [int(cv2.IMWRITE_JPEG_QUALITY), 50])  # Compression quality 50%
-        
+        cv2.imwrite(compressed_path, img_cv, [int(cv2.IMWRITE_JPEG_QUALITY), compression_quality])  # Compression quality
+
         # Get the compressed image size
         compressed_size = os.path.getsize(compressed_path) / 1024  # Size in KB
         
@@ -59,21 +70,44 @@ def compress_image():
         entry_size_compressed.delete(0, END)
         entry_size_compressed.insert(0, f"{compressed_size:.4f} kb")
         
-        # Calculate metrics
+        # Plot histogram of the compressed image
+        plot_histogram(compressed_path, "compressed")
+        
+        # Calculate metrics for the compressed image
         calculate_metrics(img_path, compressed_path)
     except Exception as e:
         print("Error compressing image:", e)
 
-# Add this new function for Hitung button
-# def hitung_metrics():
-#     if img_path:
-#         compress_image()
-#     else:
-#         print("Please open an image first.")
+def plot_histogram(image_path, img_type):
+    img_cv = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    
+    # Create a Matplotlib figure
+    fig = Figure(figsize=(6, 3), dpi=100)
+    ax = fig.add_subplot(111)
+    ax.hist(img_cv.ravel(), bins=256, range=[0, 256])
+    ax.set_title(f'{img_type.capitalize()} Image Histogram')
+    ax.set_xlabel('Pixel Values')
+    ax.set_ylabel('Frequency')
 
-# Function to calculate the metrics (PSNR, MSE, SSIM, Entropy)
+    global canvas_original, canvas_compressed
+    
+    if img_type == "original":
+        if canvas_original:
+            canvas_original.get_tk_widget().destroy()  # Clear the existing canvas
+        canvas_original = FigureCanvasTkAgg(fig, frame_histogram_original)
+        canvas_original.draw()
+        canvas_original.get_tk_widget().pack(fill=BOTH, expand=True)
+
+    else:
+        if canvas_compressed:
+            canvas_compressed.get_tk_widget().destroy()  # Clear the existing canvas
+        canvas_compressed = FigureCanvasTkAgg(fig, frame_histogram_compressed)
+        canvas_compressed.draw()
+        canvas_compressed.get_tk_widget().pack(fill=BOTH, expand=True)
+
+# Function to calculate the metrics (PSNR, MSE, SSIM, Entropy, UACI)
 def calculate_metrics(original, compressed):
-    global mse_value, psnr_value, ssim_value, entropy_value
+    global mse_value, psnr_value, ssim_value, entropy_value, uaci_value
     
     original_img = cv2.imread(original, cv2.IMREAD_GRAYSCALE)
     compressed_img = cv2.imread(compressed, cv2.IMREAD_GRAYSCALE)
@@ -87,68 +121,139 @@ def calculate_metrics(original, compressed):
     # Entropy
     entropy_value = -np.sum(original_img / 255 * np.log2(original_img / 255 + 1e-10))
 
-    # Update metrics
-    entry_psnr.delete(0, END)
-    entry_psnr.insert(0, f"{psnr_value:.4f}")
+    # UACI
+    uaci_value = np.mean(np.abs(original_img - compressed_img) / 255) * 100  # UACI in percentage
 
-    entry_mse.delete(0, END)
-    entry_mse.insert(0, f"{mse_value:.4f}")
+    # Update metrics for both original and compressed images
+    entry_psnr_original.delete(0, END)
+    entry_psnr_original.insert(0, f"{psnr_value:.4f}")
+    
+    entry_mse_original.delete(0, END)
+    entry_mse_original.insert(0, f"{mse_value:.4f}")
 
-    entry_ssim.delete(0, END)
-    entry_ssim.insert(0, f"{ssim_value:.4f}")
+    entry_ssim_original.delete(0, END)
+    entry_ssim_original.insert(0, f"{ssim_value:.4f}")
 
-    entry_entropy.delete(0, END)
-    entry_entropy.insert(0, f"{entropy_value:.4f}")
+    entry_entropy_original.delete(0, END)
+    entry_entropy_original.insert(0, f"{entropy_value:.4f}")
+
+    entry_uaci_original.delete(0, END)
+    entry_uaci_original.insert(0, f"{uaci_value:.4f}")
+
+    # For compressed image metrics
+    entry_psnr_compressed.delete(0, END)
+    entry_psnr_compressed.insert(0, f"{psnr_value:.4f}")
+    
+    entry_mse_compressed.delete(0, END)
+    entry_mse_compressed.insert(0, f"{mse_value:.4f}")
+
+    entry_ssim_compressed.delete(0, END)
+    entry_ssim_compressed.insert(0, f"{ssim_value:.4f}")
+
+    entry_entropy_compressed.delete(0, END)
+    entry_entropy_compressed.insert(0, f"{entropy_value:.4f}")
+
+    entry_uaci_compressed.delete(0, END)
+    entry_uaci_compressed.insert(0, f"{uaci_value:.4f}")
+
+    # Display algorithm and compression quality
+    entry_algorithm_name.delete(0, END)
+    entry_algorithm_name.insert(0, algorithm_name)
+    
+    entry_compression_quality.delete(0, END)
+    entry_compression_quality.insert(0, f"{compression_quality}%")
 
 def reset_fields():
     label_original_img.config(image="", bg="gray")
     entry_size_original.delete(0, END)
     label_compressed_img.config(image="", bg="white")
     entry_size_compressed.delete(0, END)
-    entry_psnr.delete(0, END)
-    entry_mse.delete(0, END)
-    entry_ssim.delete(0, END)
-    entry_entropy.delete(0, END)
+    entry_psnr_original.delete(0, END)
+    entry_mse_original.delete(0, END)
+    entry_ssim_original.delete(0, END)
+    entry_entropy_original.delete(0, END)
+    entry_uaci_original.delete(0, END)
+    entry_psnr_compressed.delete(0, END)
+    entry_mse_compressed.delete(0, END)
+    entry_ssim_compressed.delete(0, END)
+    entry_entropy_compressed.delete(0, END)
+    entry_uaci_compressed.delete(0, END)
+    entry_algorithm_name.delete(0, END)
+    entry_compression_quality.delete(0, END)
+    if canvas_original:
+        canvas_original.get_tk_widget().destroy()
+    if canvas_compressed:
+        canvas_compressed.get_tk_widget().destroy()
 
-def plot_histogram():
-    img_cv = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-    plt.hist(img_cv.ravel(), 256, [0, 256])
-    plt.title('Histogram')
-    plt.xlabel('Pixel Values')
-    plt.ylabel('Frequency')
-    plt.show()
-
-# Root window setup
+# Root window setup (Fullscreen)
 root = Tk()
 root.title("Image Compression Tool")
-root.geometry("1200x800")
-root.resizable(False, False)
+root.attributes("-fullscreen", True)  # Set window to fullscreen
+root.resizable(True, True)  # Allow resizing
 
-# Frames for layout (these need to be defined before they are used)
-frame_left = Frame(root, padx=10, pady=10)
-frame_left.pack(side=LEFT, fill=Y)
+# Frames for layout (adjust for fullscreen)
+frame_top = Frame(root, padx=10, pady=10, bg='#2e3d49')
+frame_top.pack(side=TOP, fill=X)
 
-frame_center = Frame(root, padx=10, pady=10)
-frame_center.pack(side=LEFT)
+frame_left = Frame(root, padx=10, pady=10, bd=2, relief=SOLID)
+frame_left.pack(side=LEFT, fill=Y, padx=5)
 
-frame_right = Frame(root, padx=10, pady=10)
-frame_right.pack(side=RIGHT)
+frame_right = Frame(root, padx=10, pady=10, bd=2, relief=SOLID)
+frame_right.pack(side=RIGHT, fill=Y, padx=5)
 
-# Buttons - Left Frame
-Label(frame_left, text="Pengolahan", font=("Arial", 12, "bold")).pack(pady=5)
-Button(frame_left, text="Buka Citra", width=15, command=open_image).pack(pady=5)
-Button(frame_left, text="Kompresi", width=15, command=compress_image).pack(pady=5)
-Button(frame_left, text="Histogram", width=15, command=plot_histogram).pack(pady=5)
-# Button(frame_left, text="Hitung", width=15, command=hitung_metrics).pack(pady=5)  # Added Hitung button
-Button(frame_left, text="Reset", width=15, command=reset_fields).pack(pady=5)
+# Adjust the frame for the original image histogram to be above the image
+frame_histogram_original = Frame(root, padx=10, pady=10, height=300)
+frame_histogram_original.pack(side=TOP, fill=X)
 
-# Original Image - Center Frame
-Label(frame_center, text="Citra Asli", font=("Arial", 10, "bold")).pack()
-label_original_img = Label(frame_center, width=250, height=250, bg="gray")
+# Adjust the frame for the compressed image histogram to be below the image
+frame_histogram_compressed = Frame(root, padx=10, pady=10, height=300)
+frame_histogram_compressed.pack(side=BOTTOM, fill=X)
+
+# Initialize the canvas variables
+canvas_original = None
+canvas_compressed = None
+
+# Buttons - Top Frame
+Button(frame_top, text="Buka Citra", width=15, command=open_image).pack(side=LEFT, padx=5)
+Button(frame_top, text="Kompresi", width=15, command=compress_image).pack(side=LEFT, padx=5)
+
+# Compression Quality Slider
+Label(frame_top, text="Kualitas Kompresi", bg='#2e3d49', fg='white').pack(side=LEFT, padx=5)
+quality_slider = Scale(frame_top, from_=0, to=100, orient=HORIZONTAL)
+quality_slider.set(50)  # Default to 50%
+quality_slider.pack(side=LEFT, padx=5)
+
+# Reset Button
+Button(frame_top, text="Reset", width=15, command=reset_fields, bg="red", fg="white").pack(side=RIGHT, padx=5)
+
+# Original Image - Left Frame
+Label(frame_left, text="Citra Asli", font=("Arial", 10, "bold")).pack()
+label_original_img = Label(frame_left, width=250, height=250, bg="gray")
 label_original_img.pack(pady=5)
-Label(frame_center, text="Ukuran Citra Asli").pack()
-entry_size_original = Entry(frame_center, width=30)
+Label(frame_left, text="Ukuran Citra Asli").pack()
+entry_size_original = Entry(frame_left, width=30)
 entry_size_original.pack()
+
+# Metrics for Original Image
+Label(frame_left, text="PSNR").pack()
+entry_psnr_original = Entry(frame_left, width=30)
+entry_psnr_original.pack()
+
+Label(frame_left, text="MSE").pack()
+entry_mse_original = Entry(frame_left, width=30)
+entry_mse_original.pack()
+
+Label(frame_left, text="SSIM").pack()
+entry_ssim_original = Entry(frame_left, width=30)
+entry_ssim_original.pack()
+
+Label(frame_left, text="Entropy").pack()
+entry_entropy_original = Entry(frame_left, width=30)
+entry_entropy_original.pack()
+
+Label(frame_left, text="UACI").pack()
+entry_uaci_original = Entry(frame_left, width=30)
+entry_uaci_original.pack()
 
 # Compressed Image - Right Frame
 Label(frame_right, text="Citra Hasil Kompresi", font=("Arial", 10, "bold")).pack()
@@ -158,22 +263,26 @@ Label(frame_right, text="Ukuran Citra Hasil Kompresi").pack()
 entry_size_compressed = Entry(frame_right, width=30)
 entry_size_compressed.pack()
 
-# Metrics Entries
+# Metrics for Compressed Image
 Label(frame_right, text="PSNR").pack()
-entry_psnr = Entry(frame_right, width=30)
-entry_psnr.pack()
+entry_psnr_compressed = Entry(frame_right, width=30)
+entry_psnr_compressed.pack()
 
 Label(frame_right, text="MSE").pack()
-entry_mse = Entry(frame_right, width=30)
-entry_mse.pack()
+entry_mse_compressed = Entry(frame_right, width=30)
+entry_mse_compressed.pack()
 
 Label(frame_right, text="SSIM").pack()
-entry_ssim = Entry(frame_right, width=30)
-entry_ssim.pack()
+entry_ssim_compressed = Entry(frame_right, width=30)
+entry_ssim_compressed.pack()
 
 Label(frame_right, text="Entropy").pack()
-entry_entropy = Entry(frame_right, width=30)
-entry_entropy.pack()
+entry_entropy_compressed = Entry(frame_right, width=30)
+entry_entropy_compressed.pack()
+
+Label(frame_right, text="UACI").pack()
+entry_uaci_compressed = Entry(frame_right, width=30)
+entry_uaci_compressed.pack()
 
 # Run the application
 root.mainloop()
