@@ -32,8 +32,9 @@ def open_image():
             # Plot histogram of the original image
             plot_histogram(img_path, "original")
             
-            # Calculate and display metrics for the original image
-            calculate_metrics(img_path, img_path)
+            # Display the size difference after compression (if compression happens later)
+            entry_size_difference.delete(0, END)
+            
         except Exception as e:
             print("Error opening image:", e)
 
@@ -70,6 +71,11 @@ def compress_image():
         entry_size_compressed.delete(0, END)
         entry_size_compressed.insert(0, f"{compressed_size:.4f} kb")
         
+        # Update the size difference between the original and compressed image
+        size_difference = original_size - compressed_size
+        entry_size_difference.delete(0, END)
+        entry_size_difference.insert(0, f"{size_difference:.4f} kb")
+        
         # Plot histogram of the compressed image
         plot_histogram(compressed_path, "compressed")
         
@@ -105,85 +111,62 @@ def plot_histogram(image_path, img_type):
         canvas_compressed.draw()
         canvas_compressed.get_tk_widget().pack(fill=BOTH, expand=True)
 
-# Function to calculate the metrics (PSNR, MSE, SSIM, Entropy, UACI)
+# Function to calculate the metrics (PSNR, MSE, SSIM, Entropy, UACI) only for compressed image
 def calculate_metrics(original, compressed):
     global mse_value, psnr_value, ssim_value, entropy_value, uaci_value
     
     original_img = cv2.imread(original, cv2.IMREAD_GRAYSCALE)
     compressed_img = cv2.imread(compressed, cv2.IMREAD_GRAYSCALE)
 
-    # MSE
-    mse_value = np.mean((original_img - compressed_img) ** 2)
-    # PSNR
-    psnr_value = cv2.PSNR(original_img, compressed_img)
-    # SSIM
-    ssim_value, _ = ssim(original_img, compressed_img, full=True)
-    # Entropy
-    entropy_value = -np.sum(original_img / 255 * np.log2(original_img / 255 + 1e-10))
+    # Hanya lakukan perhitungan untuk citra kompresi
+    if compressed_img is not None:
+        # MSE
+        mse_value = np.mean((original_img - compressed_img) ** 2)
+        # PSNR
+        psnr_value = cv2.PSNR(original_img, compressed_img)
+        # SSIM
+        ssim_value, _ = ssim(original_img, compressed_img, full=True)
+        # UACI
+        uaci_value = np.mean(np.abs(original_img - compressed_img) / 255) * 100  # UACI dalam persen
+        # Entropy untuk citra kompres
+        entropy_value_compressed = -np.sum(compressed_img / 255 * np.log2(compressed_img / 255 + 1e-10))
 
-    # UACI
-    uaci_value = np.mean(np.abs(original_img - compressed_img) / 255) * 100  # UACI in percentage
+        # Update metrik untuk citra hasil kompres
+        entry_psnr_compressed.delete(0, END)
+        entry_psnr_compressed.insert(0, f"{psnr_value:.4f}")
+        
+        entry_mse_compressed.delete(0, END)
+        entry_mse_compressed.insert(0, f"{mse_value:.4f}")
 
-    # Update metrics for both original and compressed images
-    entry_psnr_original.delete(0, END)
-    entry_psnr_original.insert(0, f"{psnr_value:.4f}")
-    
-    entry_mse_original.delete(0, END)
-    entry_mse_original.insert(0, f"{mse_value:.4f}")
+        entry_ssim_compressed.delete(0, END)
+        entry_ssim_compressed.insert(0, f"{ssim_value:.4f}")
 
-    entry_ssim_original.delete(0, END)
-    entry_ssim_original.insert(0, f"{ssim_value:.4f}")
+        entry_uaci_compressed.delete(0, END)
+        entry_uaci_compressed.insert(0, f"{uaci_value:.4f}")
 
-    entry_entropy_original.delete(0, END)
-    entry_entropy_original.insert(0, f"{entropy_value:.4f}")
-
-    entry_uaci_original.delete(0, END)
-    entry_uaci_original.insert(0, f"{uaci_value:.4f}")
-
-    # For compressed image metrics
-    entry_psnr_compressed.delete(0, END)
-    entry_psnr_compressed.insert(0, f"{psnr_value:.4f}")
-    
-    entry_mse_compressed.delete(0, END)
-    entry_mse_compressed.insert(0, f"{mse_value:.4f}")
-
-    entry_ssim_compressed.delete(0, END)
-    entry_ssim_compressed.insert(0, f"{ssim_value:.4f}")
-
-    entry_entropy_compressed.delete(0, END)
-    entry_entropy_compressed.insert(0, f"{entropy_value:.4f}")
-
-    entry_uaci_compressed.delete(0, END)
-    entry_uaci_compressed.insert(0, f"{uaci_value:.4f}")
-
-    # Display algorithm and compression quality
-    entry_algorithm_name.delete(0, END)
-    entry_algorithm_name.insert(0, algorithm_name)
-    
-    entry_compression_quality.delete(0, END)
-    entry_compression_quality.insert(0, f"{compression_quality}%")
+        entry_entropy_compressed.delete(0, END)
+        entry_entropy_compressed.insert(0, f"{entropy_value_compressed:.4f}")
 
 def reset_fields():
     label_original_img.config(image="", bg="gray")
     entry_size_original.delete(0, END)
     label_compressed_img.config(image="", bg="white")
     entry_size_compressed.delete(0, END)
-    entry_psnr_original.delete(0, END)
-    entry_mse_original.delete(0, END)
-    entry_ssim_original.delete(0, END)
-    entry_entropy_original.delete(0, END)
-    entry_uaci_original.delete(0, END)
     entry_psnr_compressed.delete(0, END)
     entry_mse_compressed.delete(0, END)
     entry_ssim_compressed.delete(0, END)
     entry_entropy_compressed.delete(0, END)
     entry_uaci_compressed.delete(0, END)
+    entry_size_difference.delete(0, END)
     entry_algorithm_name.delete(0, END)
     entry_compression_quality.delete(0, END)
     if canvas_original:
         canvas_original.get_tk_widget().destroy()
     if canvas_compressed:
         canvas_compressed.get_tk_widget().destroy()
+
+def close_app():
+    root.quit()  # Closes the application
 
 # Root window setup (Fullscreen)
 root = Tk()
@@ -196,18 +179,17 @@ frame_top = Frame(root, padx=10, pady=10, bg='#2e3d49')
 frame_top.pack(side=TOP, fill=X)
 
 frame_left = Frame(root, padx=10, pady=10, bd=2, relief=SOLID)
-frame_left.pack(side=LEFT, fill=Y, padx=5)
+frame_left.pack(side=LEFT, fill=Y, padx=5, expand=True)
 
 frame_right = Frame(root, padx=10, pady=10, bd=2, relief=SOLID)
-frame_right.pack(side=RIGHT, fill=Y, padx=5)
+frame_right.pack(side=RIGHT, fill=Y, padx=5, expand=True)
 
-# Adjust the frame for the original image histogram to be above the image
+# Frames for placing histograms below UACI metrics
 frame_histogram_original = Frame(root, padx=10, pady=10, height=300)
-frame_histogram_original.pack(side=TOP, fill=X)
+frame_histogram_original.pack(side=LEFT, fill=X, padx=5)
 
-# Adjust the frame for the compressed image histogram to be below the image
 frame_histogram_compressed = Frame(root, padx=10, pady=10, height=300)
-frame_histogram_compressed.pack(side=BOTTOM, fill=X)
+frame_histogram_compressed.pack(side=RIGHT, fill=X, padx=5)
 
 # Initialize the canvas variables
 canvas_original = None
@@ -223,8 +205,11 @@ quality_slider = Scale(frame_top, from_=0, to=100, orient=HORIZONTAL)
 quality_slider.set(50)  # Default to 50%
 quality_slider.pack(side=LEFT, padx=5)
 
-# Reset Button
-Button(frame_top, text="Reset", width=15, command=reset_fields, bg="red", fg="white").pack(side=RIGHT, padx=5)
+# Reset Button (Closer to the other buttons)
+Button(frame_top, text="Reset", width=15, command=reset_fields, bg="yellow", fg="black").pack(side=LEFT, padx=5)
+
+# Close Button (Red "X" in the top right corner)
+Button(frame_top, text="X", width=2, height=1, command=close_app, bg="red", fg="white", font=("Arial", 12, "bold")).pack(side=RIGHT, padx=5)
 
 # Original Image - Left Frame
 Label(frame_left, text="Citra Asli", font=("Arial", 10, "bold")).pack()
@@ -234,26 +219,10 @@ Label(frame_left, text="Ukuran Citra Asli").pack()
 entry_size_original = Entry(frame_left, width=30)
 entry_size_original.pack()
 
-# Metrics for Original Image
-Label(frame_left, text="PSNR").pack()
-entry_psnr_original = Entry(frame_left, width=30)
-entry_psnr_original.pack()
-
-Label(frame_left, text="MSE").pack()
-entry_mse_original = Entry(frame_left, width=30)
-entry_mse_original.pack()
-
-Label(frame_left, text="SSIM").pack()
-entry_ssim_original = Entry(frame_left, width=30)
-entry_ssim_original.pack()
-
-Label(frame_left, text="Entropy").pack()
-entry_entropy_original = Entry(frame_left, width=30)
-entry_entropy_original.pack()
-
-Label(frame_left, text="UACI").pack()
-entry_uaci_original = Entry(frame_left, width=30)
-entry_uaci_original.pack()
+# Citra Asli - Hanya menampilkan ukuran file asli dan perbandingan dengan ukuran hasil kompresi
+Label(frame_left, text="Perbedaan Ukuran (Asli - Kompresi)").pack()
+entry_size_difference = Entry(frame_left, width=30)
+entry_size_difference.pack()
 
 # Compressed Image - Right Frame
 Label(frame_right, text="Citra Hasil Kompresi", font=("Arial", 10, "bold")).pack()
